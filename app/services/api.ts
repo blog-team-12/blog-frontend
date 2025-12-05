@@ -1,23 +1,19 @@
 // API服务封装
+// 注意：在代理配置下，我们不再需要完整的API_BASE_URL，只需要相对路径
+import ApiClient from '@/app/services/apiClient';
+
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '';
 
 // 获取验证码
 export const getCaptcha = async (): Promise<{ captcha_id: string; pic_path: string } | null> => {
   try {
-    const response = await fetch(`${API_BASE_URL}/base/captcha`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: { captcha_id: string; pic_path: string } }>(`/base/captcha`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include', // 包含cookie
     });
 
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
-    
     if (result.code === 2000) {
       return result.data;
     } else {
@@ -33,7 +29,7 @@ export const getCaptcha = async (): Promise<{ captcha_id: string; pic_path: stri
 // 用户登录
 export const login = async (email: string, password: string, captcha: string, captcha_id: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/user/login`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: any }>('/user/login', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -44,14 +40,7 @@ export const login = async (email: string, password: string, captcha: string, ca
         captcha,
         captcha_id
       }),
-      credentials: 'include', // 包含cookie
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     return result;
   } catch (error) {
     console.error('登录异常:', error);
@@ -62,7 +51,7 @@ export const login = async (email: string, password: string, captcha: string, ca
 // 发送邮箱验证码
 export const sendEmailVerificationCode = async (email: string, captcha: string, captcha_id: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/base/sendEmailVerificationCode`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: any }>('/base/sendEmailVerificationCode', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -72,14 +61,7 @@ export const sendEmailVerificationCode = async (email: string, captcha: string, 
         captcha,
         captcha_id
       }),
-      credentials: 'include', // 包含cookie
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     return result;
   } catch (error) {
     console.error('发送邮箱验证码异常:', error);
@@ -90,7 +72,7 @@ export const sendEmailVerificationCode = async (email: string, captcha: string, 
 // 用户注册
 export const register = async (username: string, password: string, email: string, verification_code: string) => {
   try {
-    const response = await fetch(`${API_BASE_URL}/user/register`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: any }>('/user/register', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -101,14 +83,7 @@ export const register = async (username: string, password: string, email: string
         email,
         verification_code
       }),
-      credentials: 'include', // 包含cookie
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     return result;
   } catch (error) {
     console.error('注册异常:', error);
@@ -119,16 +94,9 @@ export const register = async (username: string, password: string, email: string
 // 刷新token
 export const refreshToken = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/refreshToken`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: any }>('/refreshToken', {
       method: 'GET',
-      credentials: 'include', // 包含cookie
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     return result;
   } catch (error) {
     console.error('刷新token异常:', error);
@@ -139,19 +107,12 @@ export const refreshToken = async () => {
 // 用户退出登录
 export const logout = async () => {
   try {
-    const response = await fetch(`${API_BASE_URL}/user/logout`, {
+    const result = await ApiClient.request<{ code: number; messages: string; data: any }>('/user/logout', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
       },
-      credentials: 'include', // 包含cookie
     });
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`);
-    }
-
-    const result = await response.json();
     return result;
   } catch (error) {
     console.error('退出登录异常:', error);
@@ -167,30 +128,13 @@ export const apiRequest = async (url: string, options: RequestInit = {}) => {
       'Content-Type': 'application/json',
       ...options.headers,
     },
-    credentials: 'include', // 包含cookie
     ...options,
   };
 
-  // 发起请求
-  let response = await fetch(`${API_BASE_URL}${url}`, defaultOptions);
-
-  // 检查是否是token过期的情况 (code 4011)
-  const data = await response.json();
+  // 使用ApiClient发起请求，它会自动处理token过期的情况
+  const data = await ApiClient.request(url, defaultOptions);
   
-  // 重新解析JSON，因为我们已经读取了一次body
-  if (data.code === 4011) {
-    // Token过期，需要刷新
-    console.log('Token过期，尝试刷新...');
-    // 注意：这里需要访问Redux store来调用refreshAuthToken
-    // 由于我们无法直接访问store，这里只是一个示例
-    // 在实际使用中，应该在调用apiRequest的地方处理token刷新
-    
-    // 抛出一个特殊的错误，让调用者知道需要刷新token
-    throw new Error('TOKEN_EXPIRED');
-  }
-
   return {
-    response,
     data
   };
 };
